@@ -4,7 +4,7 @@ metadata:
   name: tikrai-mail-receiver
   namespace: tikrai-mail
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: tikrai-mail-receiver
