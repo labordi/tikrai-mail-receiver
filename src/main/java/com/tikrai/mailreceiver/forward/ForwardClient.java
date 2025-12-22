@@ -46,19 +46,19 @@ public class ForwardClient {
         payload.rawBase64() != null ? payload.rawBase64().length() : 0);
     
     try {
-      client.post()
-          .uri(url)
-          .contentType(MediaType.APPLICATION_JSON)
-          .headers(h -> {
-            if (apiKey != null && !apiKey.isBlank()) {
-              h.add(authHeaderName, apiKey);
+    client.post()
+        .uri(url)
+        .contentType(MediaType.APPLICATION_JSON)
+        .headers(h -> {
+          if (apiKey != null && !apiKey.isBlank()) {
+            h.add(authHeaderName, apiKey);
               log.debug("HTTP POST request - added auth header: {}", authHeaderName);
-            }
-          })
-          .bodyValue(payload)
-          .retrieve()
-          .toBodilessEntity()
-          .timeout(Duration.ofSeconds(10))
+          }
+        })
+        .bodyValue(payload)
+        .retrieve()
+        .toBodilessEntity()
+        .timeout(Duration.ofSeconds(10))
           .doOnSuccess(response -> {
             log.info("HTTP POST response - Status: {}, FROM: {}, TO: {}", 
                 response.getStatusCode(), payload.mailFrom(), payload.rcptTo());
@@ -67,7 +67,7 @@ public class ForwardClient {
             log.error("HTTP POST request failed - URL: {}, FROM: {}, TO: {}, ERROR: {}", 
                 url, payload.mailFrom(), payload.rcptTo(), e.getMessage(), e);
           })
-          .block();
+        .block();
     } catch (Exception e) {
       log.error("HTTP POST request exception - URL: {}, FROM: {}, TO: {}, ERROR: {}", 
           url, payload.mailFrom(), payload.rcptTo(), e.getMessage(), e);
