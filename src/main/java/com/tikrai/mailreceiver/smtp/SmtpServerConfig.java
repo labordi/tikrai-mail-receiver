@@ -24,7 +24,7 @@ public class SmtpServerConfig implements AutoCloseable {
     log.info("Starting SMTP server - host: {}, port: {}", host, port);
 
     MessageHandlerFactory factory = ctx -> {
-      log.debug("SMTP connection - creating handler for context: {}", ctx);
+      log.info("SMTP NEW CONNECTION - RemoteAddress: {}", ctx != null ? ctx.getRemoteAddress() : "unknown");
       return handler;
     };
     SMTPServer s = new SMTPServer(factory);
@@ -33,9 +33,12 @@ public class SmtpServerConfig implements AutoCloseable {
 
     // MVP: no STARTTLS (add later if needed)
     s.setHideTLS(true);
+    
+    // Enable verbose logging for connections
+    s.setSoftwareName("TikraiMailReceiver");
 
     s.start();
-    log.info("SMTP server started successfully - host: {}, port: {}", host, port);
+    log.info("SMTP server started successfully - host: {}, port: {}, listening on all interfaces", host, port);
     this.server = s;
     return s;
   }
