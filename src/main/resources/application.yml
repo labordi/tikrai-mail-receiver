@@ -7,6 +7,20 @@ management:
       exposure:
         include: "health,info"
 
+logging:
+  level:
+    root: INFO
+    com.tikrai.mailreceiver: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.web.reactive: DEBUG
+    reactor.netty: DEBUG
+    org.subethamail: DEBUG
+    org.apache.http: DEBUG
+    org.springframework.http: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
 app:
   smtp:
     host: "0.0.0.0"

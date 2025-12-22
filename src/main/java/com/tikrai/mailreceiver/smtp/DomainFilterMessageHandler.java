@@ -7,6 +7,8 @@ import jakarta.mail.Multipart;
 import jakarta.mail.Part;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.subethamail.smtp.MessageHandler;
 import org.subethamail.smtp.RejectException;
@@ -17,6 +19,8 @@ import java.util.Base64;
 
 @Component
 public class DomainFilterMessageHandler implements MessageHandler {
+
+  private static final Logger log = LoggerFactory.getLogger(DomainFilterMessageHandler.class);
 
   private final String acceptedDomain;
   private final ForwardClient forwardClient;
@@ -35,27 +39,34 @@ public class DomainFilterMessageHandler implements MessageHandler {
   @Override
   public void from(String from) throws RejectException {
     this.mailFrom = from;
+    log.info("SMTP MAIL FROM: {}", from);
   }
 
   @Override
   public void recipient(String recipient) throws RejectException {
     String r = recipient.trim().toLowerCase(Locale.ROOT);
+    log.info("SMTP RCPT TO: {}", r);
     if (!r.endsWith("@" + acceptedDomain)) {
+      log.warn("SMTP RCPT TO rejected - not ending with @{}: {}", acceptedDomain, r);
       throw new RejectException(550, "Relaying denied");
     }
     rcptTo.add(r);
+    log.debug("SMTP RCPT TO accepted: {}", r);
   }
 
   @Override
   public void data(InputStream data) throws RejectException {
     try {
+      log.info("SMTP DATA received - FROM: {}, TO: {}", mailFrom, rcptTo);
       byte[] rawBytes = data.readAllBytes();
+      log.debug("SMTP DATA size: {} bytes", rawBytes.length);
       String rawB64 = Base64.getEncoder().encodeToString(rawBytes);
 
       Session session = Session.getInstance(new Properties());
       MimeMessage msg = new MimeMessage(session, new java.io.ByteArrayInputStream(rawBytes));
 
       String subject = Optional.ofNullable(msg.getSubject()).orElse("");
+      log.info("SMTP EMAIL SUBJECT: {}", subject);
 
       Map<String, List<String>> headers = new LinkedHashMap<>();
       @SuppressWarnings("unchecked")
@@ -64,8 +75,12 @@ public class DomainFilterMessageHandler implements MessageHandler {
         Header h = allHeaders.nextElement();
         headers.computeIfAbsent(h.getName(), k -> new ArrayList<>()).add(h.getValue());
       }
+      log.debug("SMTP EMAIL HEADERS: {}", headers.keySet());
 
       BodyParts bodies = extractBodies(msg);
+      log.debug("SMTP EMAIL BODY - text length: {}, html length: {}", 
+          bodies.text != null ? bodies.text.length() : 0,
+          bodies.html != null ? bodies.html.length() : 0);
 
       IncomingEmailPayload payload = new IncomingEmailPayload(
           Optional.ofNullable(mailFrom).orElse(""),
@@ -77,16 +92,20 @@ public class DomainFilterMessageHandler implements MessageHandler {
           rawB64
       );
 
+      log.info("Forwarding email - FROM: {}, TO: {}, SUBJECT: {}", mailFrom, rcptTo, subject);
       forwardClient.forward(payload);
+      log.info("Email forwarded successfully - FROM: {}, TO: {}", mailFrom, rcptTo);
 
     } catch (Exception e) {
-      System.err.println("Failed to process email: " + e.getMessage());
+      log.error("Failed to process email - FROM: {}, TO: {}, ERROR: {}", 
+          mailFrom, rcptTo, e.getMessage(), e);
       throw new RejectException(451, "Processing error");
     }
   }
 
   @Override
   public void done() {
+    log.debug("SMTP transaction done - clearing FROM: {}, TO: {}", mailFrom, rcptTo);
     mailFrom = null;
     rcptTo.clear();
   }
