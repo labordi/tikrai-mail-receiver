@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tikrai-mail-receiver-config
+  namespace: tikrai-mail
+data:
+  APP_ACCEPTED_DOMAIN: "tikrai.com"
+  APP_FORWARD_URL: "http://tikrai-server-service:8080/api/incoming-email"
+  APP_FORWARD_AUTH_HEADER: "X-Api-Key"
+  APP_SMTP_PORT: "2525"

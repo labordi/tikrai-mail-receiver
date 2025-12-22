@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tikrai-mail-receiver
+  namespace: tikrai-mail
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tikrai-mail-receiver
+  template:
+    metadata:
+      labels:
+        app: tikrai-mail-receiver
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/your-org/tikrai-mail-receiver:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: smtp
+              containerPort: 2525
+          env:
+            - name: APP_FORWARD_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tikrai-mail-receiver-secret
+                  key: APP_FORWARD_API_KEY
+
+            - name: APP_FORWARD_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: tikrai-mail-receiver-config
+                  key: APP_FORWARD_URL
+            - name: APP_FORWARD_AUTH_HEADER
+              valueFrom:
+                configMapKeyRef:
+                  name: tikrai-mail-receiver-config
+                  key: APP_FORWARD_AUTH_HEADER
+            - name: APP_ACCEPTED_DOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: tikrai-mail-receiver-config
+                  key: APP_ACCEPTED_DOMAIN
+
+            - name: SPRING_APPLICATION_JSON
+              value: |
+                {
+                  "app":{
+                    "smtp":{
+                      "host":"0.0.0.0",
+                      "port":2525,
+                      "acceptedDomain":"${APP_ACCEPTED_DOMAIN}"
+                    },
+                    "forward":{
+                      "url":"${APP_FORWARD_URL}",
+                      "authHeaderName":"${APP_FORWARD_AUTH_HEADER}",
+                      "timeoutMs":5000
+                    }
+                  }
+                }
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
