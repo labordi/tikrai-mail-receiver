@@ -3,6 +3,11 @@ kind: Service
 metadata:
   name: tikrai-mail-receiver-smtp
   namespace: tikrai-mail
+  annotations:
+    service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
+    service.beta.kubernetes.io/do-loadbalancer-algorithm: "round_robin"
+    service.beta.kubernetes.io/do-loadbalancer-healthcheck-protocol: "tcp"
+    service.beta.kubernetes.io/do-loadbalancer-healthcheck-port: "2525"
 spec:
   type: LoadBalancer
   selector:

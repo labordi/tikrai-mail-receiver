@@ -3,12 +3,13 @@ WORKDIR /app
 COPY pom.xml .
 RUN mvn -q -DskipTests dependency:go-offline
 COPY src ./src
-RUN mvn -q -DskipTests package
+RUN mvn -q -DskipTests package && \
+    find /app/target -name "*.jar" -not -name "*plain.jar" -exec cp {} /app/target/app.jar \;
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 RUN useradd -u 10001 -m appuser
 USER 10001
-COPY --from=build /app/target/tikrai-mail-receiver-0.1.0.jar app.jar
+COPY --from=build /app/target/app.jar app.jar
 EXPOSE 8080 2525
 ENTRYPOINT ["java","-jar","/app/app.jar"]

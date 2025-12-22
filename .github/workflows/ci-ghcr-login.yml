@@ -1,0 +1,43 @@
+name: CI - GHCR login and build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  login-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR (using PAT if provided, else GITHUB_TOKEN)
+        id: login-ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Try pulling images to verify access
+        run: |
+          set -e
+          echo "Pulling ghcr.io/labordi/tikrai-client:latest"
+          docker pull ghcr.io/labordi/tikrai-client:latest || echo "[WARN] Could not pull tikrai-client: check visibility or permissions."
+          echo "Pulling ghcr.io/labordi/tikrai-server:latest"
+          docker pull ghcr.io/labordi/tikrai-server:latest || echo "[WARN] Could not pull tikrai-server: check visibility or permissions."
+
+      # Example build step (optional):
+      # - name: Build server image
+      #   run: |
+      #     docker build -f Dockerfile.server -t ghcr.io/<owner>/tikrai-server:ci .

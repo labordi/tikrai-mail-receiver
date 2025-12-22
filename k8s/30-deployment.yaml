@@ -13,10 +13,12 @@ spec:
       labels:
         app: tikrai-mail-receiver
     spec:
+      imagePullSecrets:
+        - name: registry-tikrai-secret
       containers:
         - name: app
-          image: ghcr.io/your-org/tikrai-mail-receiver:0.1.0
-          imagePullPolicy: IfNotPresent
+          image: registry.digitalocean.com/tikrai/tikrai-mail-receiver:0.1.0
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080
@@ -34,33 +36,26 @@ spec:
                 configMapKeyRef:
                   name: tikrai-mail-receiver-config
                   key: APP_FORWARD_URL
-            - name: APP_FORWARD_AUTH_HEADER
+            - name: APP_FORWARD_AUTH_HEADER_NAME
               valueFrom:
                 configMapKeyRef:
                   name: tikrai-mail-receiver-config
-                  key: APP_FORWARD_AUTH_HEADER
-            - name: APP_ACCEPTED_DOMAIN
+                  key: APP_FORWARD_AUTH_HEADER_NAME
+            - name: APP_SMTP_ACCEPTED_DOMAIN
               valueFrom:
                 configMapKeyRef:
                   name: tikrai-mail-receiver-config
-                  key: APP_ACCEPTED_DOMAIN
-
-            - name: SPRING_APPLICATION_JSON
-              value: |
-                {
-                  "app":{
-                    "smtp":{
-                      "host":"0.0.0.0",
-                      "port":2525,
-                      "acceptedDomain":"${APP_ACCEPTED_DOMAIN}"
-                    },
-                    "forward":{
-                      "url":"${APP_FORWARD_URL}",
-                      "authHeaderName":"${APP_FORWARD_AUTH_HEADER}",
-                      "timeoutMs":5000
-                    }
-                  }
-                }
+                  key: APP_SMTP_ACCEPTED_DOMAIN
+            - name: APP_SMTP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: tikrai-mail-receiver-config
+                  key: APP_SMTP_PORT
+            - name: APP_FORWARD_TIMEOUT_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: tikrai-mail-receiver-config
+                  key: APP_FORWARD_TIMEOUT_MS
 
           readinessProbe:
             httpGet:
