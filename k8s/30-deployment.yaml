@@ -17,7 +17,7 @@ spec:
         - name: registry-tikrai-secret
       containers:
         - name: app
-          image: registry.digitalocean.com/tikrai/tikrai-mail-receiver:0.1.0
+          image: ghcr.io/labordi/tikrai-mail-receiver:0.1.0
           imagePullPolicy: Always
           ports:
             - name: http
