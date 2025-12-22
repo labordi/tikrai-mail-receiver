@@ -30,6 +30,6 @@ app:
     port: 2525
     acceptedDomain: "tikrai.com"
   forward:
-    url: "http://tikrai-server-service:8080/api/admin/aggregateemail"
+    url: "http://tikrai-server-service.default.svc.cluster.local:8080/api/admin/aggregateemail"
     timeoutMs: 5000
     authHeaderName: "X-Api-Key"
