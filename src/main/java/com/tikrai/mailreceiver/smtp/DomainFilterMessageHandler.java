@@ -7,6 +7,7 @@ import jakarta.mail.Multipart;
 import jakarta.mail.Part;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -120,18 +121,48 @@ public class DomainFilterMessageHandler implements MessageHandler {
     String text = null;
     String html = null;
 
-    if (part.isMimeType("text/plain")) {
-      text = Objects.toString(part.getContent(), "");
-    } else if (part.isMimeType("text/html")) {
-      html = Objects.toString(part.getContent(), "");
-    } else if (part.isMimeType("multipart/*")) {
-      Multipart mp = (Multipart) part.getContent();
-      for (int i = 0; i < mp.getCount(); i++) {
-        BodyParts bp = extractBodies(mp.getBodyPart(i));
-        if (text == null && bp.text != null) text = bp.text;
-        if (html == null && bp.html != null) html = bp.html;
+    try {
+      if (part.isMimeType("text/plain")) {
+        Object content = part.getContent();
+        if (content instanceof String) {
+          text = (String) content;
+        } else if (content instanceof InputStream) {
+          text = new String(((InputStream) content).readAllBytes());
+        } else {
+          text = Objects.toString(content, "");
+        }
+      } else if (part.isMimeType("text/html")) {
+        Object content = part.getContent();
+        if (content instanceof String) {
+          html = (String) content;
+        } else if (content instanceof InputStream) {
+          html = new String(((InputStream) content).readAllBytes());
+        } else {
+          html = Objects.toString(content, "");
+        }
+      } else if (part.isMimeType("multipart/*")) {
+        Object content = part.getContent();
+        Multipart mp;
+        if (content instanceof MimeMultipart) {
+          mp = (MimeMultipart) content;
+        } else if (content instanceof Multipart) {
+          mp = (Multipart) content;
+        } else {
+          // Fallback: try to read as MimeMultipart from raw data
+          throw new Exception("Cannot handle multipart content type: " + content.getClass());
+        }
+        for (int i = 0; i < mp.getCount(); i++) {
+          BodyParts bp = extractBodies(mp.getBodyPart(i));
+          if (text == null && bp.text != null && !bp.text.isEmpty()) text = bp.text;
+          if (html == null && bp.html != null && !bp.html.isEmpty()) html = bp.html;
+        }
       }
+    } catch (ClassCastException e) {
+      log.warn("ClassCastException while extracting body from part with MIME type: {}, error: {}", 
+          part.getContentType(), e.getMessage());
+      // Return empty bodies if we can't parse
     }
+    
     return new BodyParts(
         text != null ? text : "",
         html != null ? html : ""
