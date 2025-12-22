@@ -7,13 +7,13 @@ metadata:
     service.beta.kubernetes.io/do-loadbalancer-protocol: "tcp"
     service.beta.kubernetes.io/do-loadbalancer-algorithm: "round_robin"
     service.beta.kubernetes.io/do-loadbalancer-healthcheck-protocol: "tcp"
-    service.beta.kubernetes.io/do-loadbalancer-healthcheck-port: "2525"
+    service.beta.kubernetes.io/do-loadbalancer-healthcheck-port: "25"
 spec:
   type: LoadBalancer
   selector:
     app: tikrai-mail-receiver
   ports:
     - name: smtp
-      port: 2525
-      targetPort: 2525
+      port: 25
+      targetPort: 25
       protocol: TCP

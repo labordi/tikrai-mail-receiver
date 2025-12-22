@@ -23,7 +23,7 @@ spec:
             - name: http
               containerPort: 8080
             - name: smtp
-              containerPort: 2525
+              containerPort: 25
           env:
             - name: APP_FORWARD_API_KEY
               valueFrom:

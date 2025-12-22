@@ -7,5 +7,5 @@ data:
   APP_SMTP_ACCEPTED_DOMAIN: "tikrai.com"
   APP_FORWARD_URL: "http://tikrai-server-service:8080/api/incoming-email"
   APP_FORWARD_AUTH_HEADER_NAME: "X-Api-Key"
-  APP_SMTP_PORT: "2525"
+  APP_SMTP_PORT: "25"
   APP_FORWARD_TIMEOUT_MS: "5000"
