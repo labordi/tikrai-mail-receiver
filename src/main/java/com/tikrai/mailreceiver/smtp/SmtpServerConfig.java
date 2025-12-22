@@ -19,7 +19,7 @@ public class SmtpServerConfig implements AutoCloseable {
                               org.springframework.core.env.Environment env) {
 
     String host = env.getProperty("app.smtp.host", "0.0.0.0");
-    int port = Integer.parseInt(env.getProperty("app.smtp.port", "25"));
+    int port = Integer.parseInt(env.getProperty("app.smtp.port", "2525"));
 
     log.info("Starting SMTP server - host: {}, port: {}", host, port);
 
