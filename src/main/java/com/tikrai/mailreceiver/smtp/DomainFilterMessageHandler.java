@@ -8,11 +8,10 @@ import jakarta.mail.Part;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.stereotype.Component;
-import org.subethamail.smtp.MessageContext;
 import org.subethamail.smtp.MessageHandler;
 import org.subethamail.smtp.RejectException;
 
-import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.*;
 import java.util.Base64;
 
@@ -48,13 +47,13 @@ public class DomainFilterMessageHandler implements MessageHandler {
   }
 
   @Override
-  public void data(ByteArrayInputStream data) throws RejectException {
+  public void data(InputStream data) throws RejectException {
     try {
       byte[] rawBytes = data.readAllBytes();
       String rawB64 = Base64.getEncoder().encodeToString(rawBytes);
 
       Session session = Session.getInstance(new Properties());
-      MimeMessage msg = new MimeMessage(session, new ByteArrayInputStream(rawBytes));
+      MimeMessage msg = new MimeMessage(session, new java.io.ByteArrayInputStream(rawBytes));
 
       String subject = Optional.ofNullable(msg.getSubject()).orElse("");
 
@@ -90,11 +89,6 @@ public class DomainFilterMessageHandler implements MessageHandler {
   public void done() {
     mailFrom = null;
     rcptTo.clear();
-  }
-
-  @Override
-  public MessageContext getMessageContext() {
-    return null;
   }
 
   private static class BodyParts {
