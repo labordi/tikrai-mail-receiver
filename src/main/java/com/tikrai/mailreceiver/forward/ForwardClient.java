@@ -20,19 +20,13 @@ public class ForwardClient {
 
   private final WebClient client;
   private final String url;
-  private final String authHeaderName;
-  private final String apiKey;
 
   public ForwardClient(
       WebClient.Builder builder,
       @Value("${app.forward.url}") String url,
-      @Value("${app.forward.timeoutMs}") long timeoutMs,
-      @Value("${app.forward.authHeaderName}") String authHeaderName,
-      @Value("${APP_FORWARD_API_KEY:}") String apiKey
+      @Value("${app.forward.timeoutMs}") long timeoutMs
   ) {
     this.url = url;
-    this.authHeaderName = authHeaderName;
-    this.apiKey = apiKey;
 
     this.client = builder
         .codecs(c -> c.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
@@ -91,9 +85,6 @@ public class ForwardClient {
     
     // Build curl command for manual testing
     StringBuilder curlCmd = new StringBuilder("curl -X POST '").append(url).append("'");
-    if (apiKey != null && !apiKey.isBlank()) {
-      curlCmd.append(" -H '").append(authHeaderName).append(": ").append(apiKey).append("'");
-    }
     curlCmd.append(" -H 'Content-Type: application/x-www-form-urlencoded'");
     curlCmd.append(" -d '");
     boolean first = true;
@@ -114,12 +105,6 @@ public class ForwardClient {
       client.post()
           .uri(url)
           .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-          .headers(h -> {
-            if (apiKey != null && !apiKey.isBlank()) {
-              h.add(authHeaderName, apiKey);
-              log.debug("HTTP POST request - added auth header: {}", authHeaderName);
-            }
-          })
           .bodyValue(formData)
           .retrieve()
           .toBodilessEntity()

@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: tikrai-mail-receiver
-  namespace: tikrai-mail
 spec:
   replicas: 1
   selector:
@@ -25,22 +24,11 @@ spec:
             - name: smtp
               containerPort: 2525
           env:
-            - name: APP_FORWARD_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: tikrai-mail-receiver-secret
-                  key: APP_FORWARD_API_KEY
-
             - name: APP_FORWARD_URL
               valueFrom:
                 configMapKeyRef:
                   name: tikrai-mail-receiver-config
                   key: APP_FORWARD_URL
-            - name: APP_FORWARD_AUTH_HEADER_NAME
-              valueFrom:
-                configMapKeyRef:
-                  name: tikrai-mail-receiver-config
-                  key: APP_FORWARD_AUTH_HEADER_NAME
             - name: APP_SMTP_ACCEPTED_DOMAIN
               valueFrom:
                 configMapKeyRef:
