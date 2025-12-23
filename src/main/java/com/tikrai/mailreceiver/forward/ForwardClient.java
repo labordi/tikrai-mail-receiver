@@ -73,6 +73,43 @@ public class ForwardClient {
       formData.add("headers", headersStr);
     }
     
+    // Log all form parameters for debugging
+    log.info("=== HTTP POST REQUEST DETAILS ===");
+    log.info("URL: {}", url);
+    log.info("Content-Type: application/x-www-form-urlencoded");
+    log.info("Form parameters:");
+    formData.forEach((key, values) -> {
+      if (key.equals("text") || key.equals("html") || key.equals("headers")) {
+        log.info("  {}: [{} bytes]", key, values.get(0) != null ? values.get(0).length() : 0);
+        if (values.get(0) != null && values.get(0).length() < 500) {
+          log.info("    Content preview: {}", values.get(0).substring(0, Math.min(200, values.get(0).length())));
+        }
+      } else {
+        log.info("  {}: {}", key, values.get(0));
+      }
+    });
+    
+    // Build curl command for manual testing
+    StringBuilder curlCmd = new StringBuilder("curl -X POST '").append(url).append("'");
+    if (apiKey != null && !apiKey.isBlank()) {
+      curlCmd.append(" -H '").append(authHeaderName).append(": ").append(apiKey).append("'");
+    }
+    curlCmd.append(" -H 'Content-Type: application/x-www-form-urlencoded'");
+    curlCmd.append(" -d '");
+    boolean first = true;
+    for (String key : formData.keySet()) {
+      if (!first) curlCmd.append("&");
+      first = false;
+      String value = formData.getFirst(key);
+      // URL encode the value
+      value = value != null ? value.replace("'", "'\\''") : "";
+      curlCmd.append(key).append("=").append(value);
+    }
+    curlCmd.append("'");
+    log.info("CURL command to reproduce:");
+    log.info("{}", curlCmd.toString());
+    log.info("=== END REQUEST DETAILS ===");
+    
     try {
       client.post()
           .uri(url)
@@ -94,6 +131,12 @@ public class ForwardClient {
           .doOnError(e -> {
             log.error("HTTP POST request failed - URL: {}, FROM: {}, TO: {}, ERROR: {}", 
                 url, payload.mailFrom(), toEmail, e.getMessage(), e);
+            if (e instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
+              org.springframework.web.reactive.function.client.WebClientResponseException wcre = 
+                  (org.springframework.web.reactive.function.client.WebClientResponseException) e;
+              log.error("Response status: {}, Response body: {}", 
+                  wcre.getStatusCode(), wcre.getResponseBodyAsString());
+            }
           })
           .block();
     } catch (Exception e) {
