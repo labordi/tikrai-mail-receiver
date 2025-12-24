@@ -34,6 +34,9 @@ public class ForwardClient {
   }
 
   public void forward(IncomingEmailPayload payload) {
+    log.info("=== FORWARD CLIENT CALLED ===");
+    log.info("Forwarding email to: {}", url);
+    
     // Extract first recipient email (controller expects single "to" parameter)
     String toEmail = payload.rcptTo() != null && !payload.rcptTo().isEmpty() 
         ? payload.rcptTo().get(0) 
@@ -101,20 +104,25 @@ public class ForwardClient {
     log.info("{}", curlCmd.toString());
     log.info("=== END REQUEST DETAILS ===");
     
+    log.info("Sending HTTP POST request NOW...");
     try {
-      client.post()
+      var response = client.post()
           .uri(url)
           .contentType(MediaType.APPLICATION_FORM_URLENCODED)
           .bodyValue(formData)
           .retrieve()
           .toBodilessEntity()
           .timeout(Duration.ofSeconds(10))
-          .doOnSuccess(response -> {
-            log.info("HTTP POST response - Status: {}, FROM: {}, TO: {}", 
-                response.getStatusCode(), payload.mailFrom(), toEmail);
+          .doOnSubscribe(subscription -> {
+            log.info("HTTP POST request SUBSCRIBED - starting request to: {}", url);
+          })
+          .doOnSuccess(responseEntity -> {
+            log.info("HTTP POST SUCCESS - Status: {}, FROM: {}, TO: {}", 
+                responseEntity.getStatusCode(), payload.mailFrom(), toEmail);
+            log.info("Response headers: {}", responseEntity.getHeaders());
           })
           .doOnError(e -> {
-            log.error("HTTP POST request failed - URL: {}, FROM: {}, TO: {}, ERROR: {}", 
+            log.error("HTTP POST ERROR - URL: {}, FROM: {}, TO: {}, ERROR: {}", 
                 url, payload.mailFrom(), toEmail, e.getMessage(), e);
             if (e instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
               org.springframework.web.reactive.function.client.WebClientResponseException wcre = 
@@ -124,10 +132,14 @@ public class ForwardClient {
             }
           })
           .block();
+      
+      log.info("HTTP POST request COMPLETED - Status: {}", response != null ? response.getStatusCode() : "null");
     } catch (Exception e) {
-      log.error("HTTP POST request exception - URL: {}, FROM: {}, TO: {}, ERROR: {}", 
+      log.error("HTTP POST EXCEPTION - URL: {}, FROM: {}, TO: {}, ERROR: {}", 
           url, payload.mailFrom(), toEmail, e.getMessage(), e);
+      log.error("Exception stack trace:", e);
       throw e;
     }
+    log.info("=== FORWARD CLIENT FINISHED ===");
   }
 }
