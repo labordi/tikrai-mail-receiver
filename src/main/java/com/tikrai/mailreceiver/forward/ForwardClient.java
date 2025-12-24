@@ -111,15 +111,22 @@ public class ForwardClient {
           .contentType(MediaType.APPLICATION_FORM_URLENCODED)
           .bodyValue(formData)
           .retrieve()
-          .toBodilessEntity()
+          .toEntity(String.class)
           .timeout(Duration.ofSeconds(10))
           .doOnSubscribe(subscription -> {
             log.info("HTTP POST request SUBSCRIBED - starting request to: {}", url);
           })
+          .doOnNext(responseEntity -> {
+            log.info("HTTP POST RESPONSE RECEIVED - Status: {}, FROM: {}, TO: {}", 
+                responseEntity.getStatusCode(), payload.mailFrom(), toEmail);
+            log.info("Response headers: {}", responseEntity.getHeaders());
+            if (responseEntity.getBody() != null) {
+              log.info("Response body: {}", responseEntity.getBody());
+            }
+          })
           .doOnSuccess(responseEntity -> {
             log.info("HTTP POST SUCCESS - Status: {}, FROM: {}, TO: {}", 
                 responseEntity.getStatusCode(), payload.mailFrom(), toEmail);
-            log.info("Response headers: {}", responseEntity.getHeaders());
           })
           .doOnError(e -> {
             log.error("HTTP POST ERROR - URL: {}, FROM: {}, TO: {}, ERROR: {}", 
@@ -133,7 +140,12 @@ public class ForwardClient {
           })
           .block();
       
-      log.info("HTTP POST request COMPLETED - Status: {}", response != null ? response.getStatusCode() : "null");
+      if (response != null) {
+        log.info("HTTP POST request COMPLETED - Status: {}, Body: {}", 
+            response.getStatusCode(), response.getBody());
+      } else {
+        log.warn("HTTP POST request COMPLETED but response is NULL");
+      }
     } catch (Exception e) {
       log.error("HTTP POST EXCEPTION - URL: {}, FROM: {}, TO: {}, ERROR: {}", 
           url, payload.mailFrom(), toEmail, e.getMessage(), e);
