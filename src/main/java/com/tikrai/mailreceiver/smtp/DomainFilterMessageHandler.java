@@ -78,10 +78,19 @@ public class DomainFilterMessageHandler implements MessageHandler {
       }
       log.debug("SMTP EMAIL HEADERS: {}", headers.keySet());
 
+      log.info("SMTP EMAIL Content-Type: {}", msg.getContentType());
       BodyParts bodies = extractBodies(msg);
-      log.debug("SMTP EMAIL BODY - text length: {}, html length: {}", 
+      log.info("SMTP EMAIL BODY EXTRACTED - text length: {}, html length: {}", 
           bodies.text != null ? bodies.text.length() : 0,
           bodies.html != null ? bodies.html.length() : 0);
+      if (bodies.text != null && !bodies.text.isEmpty()) {
+        log.debug("SMTP EMAIL TEXT preview (first 200 chars): {}", 
+            bodies.text.substring(0, Math.min(200, bodies.text.length())));
+      }
+      if (bodies.html != null && !bodies.html.isEmpty()) {
+        log.debug("SMTP EMAIL HTML preview (first 200 chars): {}", 
+            bodies.html.substring(0, Math.min(200, bodies.html.length())));
+      }
 
       IncomingEmailPayload payload = new IncomingEmailPayload(
           Optional.ofNullable(mailFrom).orElse(""),
@@ -122,25 +131,33 @@ public class DomainFilterMessageHandler implements MessageHandler {
     String html = null;
 
     try {
+      String contentType = part.getContentType();
+      log.debug("Extracting body from part with Content-Type: {}", contentType);
+      
       if (part.isMimeType("text/plain")) {
         Object content = part.getContent();
+        log.debug("Found text/plain part, content type: {}", content != null ? content.getClass() : "null");
         if (content instanceof String) {
           text = (String) content;
         } else if (content instanceof InputStream) {
-          text = new String(((InputStream) content).readAllBytes());
+          text = new String(((InputStream) content).readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         } else {
           text = Objects.toString(content, "");
         }
+        log.debug("Extracted text/plain: {} chars", text != null ? text.length() : 0);
       } else if (part.isMimeType("text/html")) {
         Object content = part.getContent();
+        log.debug("Found text/html part, content type: {}", content != null ? content.getClass() : "null");
         if (content instanceof String) {
           html = (String) content;
         } else if (content instanceof InputStream) {
-          html = new String(((InputStream) content).readAllBytes());
+          html = new String(((InputStream) content).readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         } else {
           html = Objects.toString(content, "");
         }
+        log.debug("Extracted text/html: {} chars", html != null ? html.length() : 0);
       } else if (part.isMimeType("multipart/*")) {
+        log.debug("Found multipart/*, extracting sub-parts");
         Object content = part.getContent();
         Multipart mp;
         if (content instanceof MimeMultipart) {
@@ -148,19 +165,32 @@ public class DomainFilterMessageHandler implements MessageHandler {
         } else if (content instanceof Multipart) {
           mp = (Multipart) content;
         } else {
-          // Fallback: try to read as MimeMultipart from raw data
-          throw new Exception("Cannot handle multipart content type: " + content.getClass());
+          log.warn("Cannot handle multipart content type: {}", content != null ? content.getClass() : "null");
+          throw new Exception("Cannot handle multipart content type: " + (content != null ? content.getClass() : "null"));
         }
+        log.debug("Multipart has {} parts", mp.getCount());
         for (int i = 0; i < mp.getCount(); i++) {
+          log.debug("Processing multipart part {} of {}", i + 1, mp.getCount());
           BodyParts bp = extractBodies(mp.getBodyPart(i));
-          if (text == null && bp.text != null && !bp.text.isEmpty()) text = bp.text;
-          if (html == null && bp.html != null && !bp.html.isEmpty()) html = bp.html;
+          if (text == null && bp.text != null && !bp.text.isEmpty()) {
+            text = bp.text;
+            log.debug("Found text from multipart part {}: {} chars", i + 1, text.length());
+          }
+          if (html == null && bp.html != null && !bp.html.isEmpty()) {
+            html = bp.html;
+            log.debug("Found html from multipart part {}: {} chars", i + 1, html.length());
+          }
         }
+      } else {
+        log.debug("Skipping part with MIME type: {}", contentType);
       }
     } catch (ClassCastException e) {
       log.warn("ClassCastException while extracting body from part with MIME type: {}, error: {}", 
-          part.getContentType(), e.getMessage());
+          part.getContentType(), e.getMessage(), e);
       // Return empty bodies if we can't parse
+    } catch (Exception e) {
+      log.warn("Exception while extracting body from part with MIME type: {}, error: {}", 
+          part.getContentType(), e.getMessage(), e);
     }
     
     return new BodyParts(
