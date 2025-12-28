@@ -60,12 +60,9 @@ public class ForwardClient {
     formData.add("to", toEmail);
     formData.add("from", payload.mailFrom() != null ? payload.mailFrom() : "");
     formData.add("subject", payload.subject() != null ? payload.subject() : "");
-    if (payload.textBody() != null && !payload.textBody().isEmpty()) {
-      formData.add("text", payload.textBody());
-    }
-    if (payload.htmlBody() != null && !payload.htmlBody().isEmpty()) {
-      formData.add("html", payload.htmlBody());
-    }
+    // Always send text and html parameters, even if empty
+    formData.add("text", payload.textBody() != null ? payload.textBody() : "");
+    formData.add("html", payload.htmlBody() != null ? payload.htmlBody() : "");
     if (!headersStr.isEmpty()) {
       formData.add("headers", headersStr);
     }
