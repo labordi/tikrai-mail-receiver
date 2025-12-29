@@ -140,7 +140,7 @@ public class DomainFilterMessageHandler implements MessageHandler {
       
       if (part.isMimeType("text/plain")) {
         Object content = part.getContent();
-        log.debug("Found text/plain part, content type: {}", content != null ? content.getClass() : "null");
+        log.info("Found text/plain part, content type: {}", content != null ? content.getClass() : "null");
         if (content instanceof String) {
           text = (String) content;
         } else if (content instanceof InputStream) {
@@ -148,10 +148,13 @@ public class DomainFilterMessageHandler implements MessageHandler {
         } else {
           text = Objects.toString(content, "");
         }
-        log.debug("Extracted text/plain: {} chars", text != null ? text.length() : 0);
+        log.info("Extracted text/plain: {} chars", text != null ? text.length() : 0);
+        if (text != null && !text.isEmpty() && text.length() < 500) {
+          log.info("Text content preview: {}", text.substring(0, Math.min(200, text.length())));
+        }
       } else if (part.isMimeType("text/html")) {
         Object content = part.getContent();
-        log.debug("Found text/html part, content type: {}", content != null ? content.getClass() : "null");
+        log.info("Found text/html part, content type: {}", content != null ? content.getClass() : "null");
         if (content instanceof String) {
           html = (String) content;
         } else if (content instanceof InputStream) {
@@ -159,61 +162,79 @@ public class DomainFilterMessageHandler implements MessageHandler {
         } else {
           html = Objects.toString(content, "");
         }
-        log.debug("Extracted text/html: {} chars", html != null ? html.length() : 0);
+        log.info("Extracted text/html: {} chars", html != null ? html.length() : 0);
+        if (html != null && !html.isEmpty() && html.length() < 500) {
+          log.info("HTML content preview: {}", html.substring(0, Math.min(200, html.length())));
+        }
       } else if (part.isMimeType("multipart/*")) {
-        log.debug("Found multipart/*, extracting sub-parts");
+        log.info("Found multipart/*, extracting sub-parts, Content-Type: {}", contentType);
         Multipart mp = null;
         try {
-          // If we have raw bytes and part is MimeMessage, create MimeMultipart from raw bytes
-          if (rawBytes != null && part instanceof MimeMessage) {
-            try {
-              MimeMessage mimeMsg = (MimeMessage) part;
-              String contentType = mimeMsg.getContentType();
-              log.debug("Creating MimeMultipart from raw bytes with Content-Type: {}", contentType);
-              mp = new MimeMultipart(new jakarta.mail.util.ByteArrayDataSource(
-                  rawBytes, contentType));
-            } catch (Exception e) {
-              log.warn("Failed to create MimeMultipart from raw bytes: {}", e.getMessage());
+          // First, try to get content directly using getContent()
+          try {
+            Object content = part.getContent();
+            log.debug("getContent() returned: {}", content != null ? content.getClass().getName() : "null");
+            if (content instanceof MimeMultipart) {
+              mp = (MimeMultipart) content;
+              log.debug("Successfully got MimeMultipart from getContent()");
+            } else if (content instanceof Multipart) {
+              mp = (Multipart) content;
+              log.debug("Successfully got Multipart from getContent()");
+            } else {
+              log.warn("getContent() returned unexpected type: {}", content != null ? content.getClass().getName() : "null");
             }
-          }
-          
-          // Fallback: try getContent() if above fails
-          if (mp == null) {
-            try {
-              Object content = part.getContent();
-              if (content instanceof MimeMultipart) {
-                mp = (MimeMultipart) content;
-              } else if (content instanceof Multipart) {
-                mp = (Multipart) content;
+          } catch (ClassCastException e) {
+            log.warn("ClassCastException getting multipart content: {}", e.getMessage());
+            // Try alternative approach: parse from raw bytes if available
+            if (rawBytes != null && part instanceof MimeMessage) {
+              try {
+                log.debug("Attempting to parse MimeMessage from raw bytes");
+                Session session = Session.getInstance(new Properties());
+                MimeMessage rawMsg = new MimeMessage(session, new java.io.ByteArrayInputStream(rawBytes));
+                Object rawContent = rawMsg.getContent();
+                if (rawContent instanceof MimeMultipart) {
+                  mp = (MimeMultipart) rawContent;
+                  log.debug("Successfully parsed MimeMultipart from raw bytes");
+                } else if (rawContent instanceof Multipart) {
+                  mp = (Multipart) rawContent;
+                  log.debug("Successfully parsed Multipart from raw bytes");
+                }
+              } catch (Exception e2) {
+                log.warn("Failed to parse multipart from raw bytes: {}", e2.getMessage());
               }
-            } catch (ClassCastException e) {
-              log.warn("ClassCastException getting multipart content: {}", e.getMessage());
             }
+          } catch (Exception e) {
+            log.warn("Exception getting multipart content: {}", e.getMessage(), e);
           }
         } catch (Exception e) {
-          log.warn("Exception getting multipart content: {}", e.getMessage());
+          log.error("Unexpected exception getting multipart content: {}", e.getMessage(), e);
         }
         
         if (mp != null) {
-          log.debug("Multipart has {} parts", mp.getCount());
+          log.info("Multipart has {} parts", mp.getCount());
           for (int i = 0; i < mp.getCount(); i++) {
-            log.debug("Processing multipart part {} of {}", i + 1, mp.getCount());
             try {
-              BodyParts bp = extractBodies(mp.getBodyPart(i), null);
+              Part bodyPart = mp.getBodyPart(i);
+              String partContentType = bodyPart.getContentType();
+              log.info("Processing multipart part {} of {} - Content-Type: {}", i + 1, mp.getCount(), partContentType);
+              
+              // Pass rawBytes recursively so nested multiparts can be parsed
+              BodyParts bp = extractBodies(bodyPart, rawBytes);
+              
               if (text == null && bp.text != null && !bp.text.isEmpty()) {
                 text = bp.text;
-                log.debug("Found text from multipart part {}: {} chars", i + 1, text.length());
+                log.info("Found text from multipart part {}: {} chars", i + 1, text.length());
               }
               if (html == null && bp.html != null && !bp.html.isEmpty()) {
                 html = bp.html;
-                log.debug("Found html from multipart part {}: {} chars", i + 1, html.length());
+                log.info("Found html from multipart part {}: {} chars", i + 1, html.length());
               }
             } catch (Exception e) {
-              log.warn("Error extracting body from multipart part {}: {}", i + 1, e.getMessage());
+              log.error("Error extracting body from multipart part {}: {}", i + 1, e.getMessage(), e);
             }
           }
         } else {
-          log.warn("Could not extract multipart content from part");
+          log.error("Could not extract multipart content from part with Content-Type: {}", contentType);
         }
       } else {
         log.debug("Skipping part with MIME type: {}", contentType);
