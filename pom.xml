@@ -45,9 +45,10 @@
       <artifactId>spring-boot-starter-webflux</artifactId>
     </dependency>
 
+    <!-- Use subethasmtp-java17 which supports Jakarta Mail -->
     <dependency>
-      <groupId>org.subethamail</groupId>
-      <artifactId>subethasmtp</artifactId>
+      <groupId>io.github.frshdn</groupId>
+      <artifactId>subethasmtp-java17</artifactId>
       <version>3.1.7</version>
       <!-- Exclude old com.sun.mail and javax.activation if present -->
       <exclusions>
@@ -70,11 +71,9 @@
       </exclusions>
     </dependency>
 
-    <!-- Jakarta Mail using Angus implementation (replaces spring-boot-starter-mail) -->
-    <dependency>
-      <groupId>org.eclipse.angus</groupId>
-      <artifactId>angus-mail</artifactId>
-    </dependency>
+    <!-- Jakarta Mail using Angus implementation (provided by subethasmtp-java17) -->
+    <!-- Note: subethasmtp-java17 already includes org.eclipse.angus:jakarta.mail:2.0.3 -->
+    <!-- We keep angus-activation explicitly for our code -->
     <dependency>
       <groupId>org.eclipse.angus</groupId>
       <artifactId>angus-activation</artifactId>
