@@ -44,27 +44,48 @@ public class ForwardClient {
     
     log.info("HTTP POST request - URL: {}, FROM: {}, TO: {}, SUBJECT: {}", 
         url, payload.mailFrom(), toEmail, payload.subject());
-    log.debug("HTTP POST request payload size - headers: {}, text: {}, html: {}, rawBase64: {}", 
+    log.info("HTTP POST request payload size - headers: {}, text: {}, html: {}, rawBase64: {}", 
         payload.headers().size(),
         payload.textBody() != null ? payload.textBody().length() : 0,
         payload.htmlBody() != null ? payload.htmlBody().length() : 0,
         payload.rawBase64() != null ? payload.rawBase64().length() : 0);
     
+    log.info("Starting headers serialization...");
     // Serialize headers Map to String format
-    String headersStr = payload.headers().entrySet().stream()
-        .map(entry -> entry.getKey() + ": " + String.join(", ", entry.getValue()))
-        .collect(Collectors.joining("\n"));
+    String headersStr = "";
+    try {
+      headersStr = payload.headers().entrySet().stream()
+          .map(entry -> {
+            String key = entry.getKey() != null ? entry.getKey() : "";
+            String value = entry.getValue() != null && !entry.getValue().isEmpty() 
+                ? String.join(", ", entry.getValue()) 
+                : "";
+            return key + ": " + value;
+          })
+          .collect(Collectors.joining("\n"));
+      log.info("Headers serialized successfully, length: {}", headersStr.length());
+    } catch (Exception e) {
+      log.error("Failed to serialize headers: {}", e.getMessage(), e);
+      headersStr = "";
+    }
     
+    log.info("Building form-urlencoded body...");
     // Build form-urlencoded body
     MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
-    formData.add("to", toEmail);
-    formData.add("from", payload.mailFrom() != null ? payload.mailFrom() : "");
-    formData.add("subject", payload.subject() != null ? payload.subject() : "");
-    // Always send text and html parameters, even if empty
-    formData.add("text", payload.textBody() != null ? payload.textBody() : "");
-    formData.add("html", payload.htmlBody() != null ? payload.htmlBody() : "");
-    if (!headersStr.isEmpty()) {
-      formData.add("headers", headersStr);
+    try {
+      formData.add("to", toEmail);
+      formData.add("from", payload.mailFrom() != null ? payload.mailFrom() : "");
+      formData.add("subject", payload.subject() != null ? payload.subject() : "");
+      // Always send text and html parameters, even if empty
+      formData.add("text", payload.textBody() != null ? payload.textBody() : "");
+      formData.add("html", payload.htmlBody() != null ? payload.htmlBody() : "");
+      if (!headersStr.isEmpty()) {
+        formData.add("headers", headersStr);
+      }
+      log.info("Form data built successfully, {} parameters", formData.size());
+    } catch (Exception e) {
+      log.error("Failed to build form data: {}", e.getMessage(), e);
+      throw e;
     }
     
     // Log all form parameters for debugging
@@ -72,33 +93,49 @@ public class ForwardClient {
     log.info("URL: {}", url);
     log.info("Content-Type: application/x-www-form-urlencoded");
     log.info("Form parameters:");
-    formData.forEach((key, values) -> {
-      if (key.equals("text") || key.equals("html") || key.equals("headers")) {
-        log.info("  {}: [{} bytes]", key, values.get(0) != null ? values.get(0).length() : 0);
-        if (values.get(0) != null && values.get(0).length() < 500) {
-          log.info("    Content preview: {}", values.get(0).substring(0, Math.min(200, values.get(0).length())));
+    try {
+      formData.forEach((key, values) -> {
+        try {
+          if (key.equals("text") || key.equals("html") || key.equals("headers")) {
+            int length = values != null && !values.isEmpty() && values.get(0) != null 
+                ? values.get(0).length() 
+                : 0;
+            log.info("  {}: [{} bytes]", key, length);
+            if (values != null && !values.isEmpty() && values.get(0) != null && values.get(0).length() < 500) {
+              log.info("    Content preview: {}", values.get(0).substring(0, Math.min(200, values.get(0).length())));
+            }
+          } else {
+            log.info("  {}: {}", key, values != null && !values.isEmpty() ? values.get(0) : "");
+          }
+        } catch (Exception e) {
+          log.error("Error logging form parameter {}: {}", key, e.getMessage());
         }
-      } else {
-        log.info("  {}: {}", key, values.get(0));
-      }
-    });
+      });
+    } catch (Exception e) {
+      log.error("Error iterating form data: {}", e.getMessage(), e);
+    }
     
     // Build curl command for manual testing
-    StringBuilder curlCmd = new StringBuilder("curl -X POST '").append(url).append("'");
-    curlCmd.append(" -H 'Content-Type: application/x-www-form-urlencoded'");
-    curlCmd.append(" -d '");
-    boolean first = true;
-    for (String key : formData.keySet()) {
-      if (!first) curlCmd.append("&");
-      first = false;
-      String value = formData.getFirst(key);
-      // URL encode the value
-      value = value != null ? value.replace("'", "'\\''") : "";
-      curlCmd.append(key).append("=").append(value);
+    log.info("Building CURL command...");
+    try {
+      StringBuilder curlCmd = new StringBuilder("curl -X POST '").append(url).append("'");
+      curlCmd.append(" -H 'Content-Type: application/x-www-form-urlencoded'");
+      curlCmd.append(" -d '");
+      boolean first = true;
+      for (String key : formData.keySet()) {
+        if (!first) curlCmd.append("&");
+        first = false;
+        String value = formData.getFirst(key);
+        // URL encode the value
+        value = value != null ? value.replace("'", "'\\''") : "";
+        curlCmd.append(key).append("=").append(value);
+      }
+      curlCmd.append("'");
+      log.info("CURL command to reproduce:");
+      log.info("{}", curlCmd.toString());
+    } catch (Exception e) {
+      log.error("Error building CURL command: {}", e.getMessage(), e);
     }
-    curlCmd.append("'");
-    log.info("CURL command to reproduce:");
-    log.info("{}", curlCmd.toString());
     log.info("=== END REQUEST DETAILS ===");
     
     log.info("Sending HTTP POST request NOW...");

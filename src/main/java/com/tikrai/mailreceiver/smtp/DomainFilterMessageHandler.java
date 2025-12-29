@@ -84,12 +84,16 @@ public class DomainFilterMessageHandler implements MessageHandler {
           bodies.text != null ? bodies.text.length() : 0,
           bodies.html != null ? bodies.html.length() : 0);
       if (bodies.text != null && !bodies.text.isEmpty()) {
-        log.debug("SMTP EMAIL TEXT preview (first 200 chars): {}", 
+        log.info("SMTP EMAIL TEXT preview (first 200 chars): {}", 
             bodies.text.substring(0, Math.min(200, bodies.text.length())));
+      } else {
+        log.warn("SMTP EMAIL TEXT is EMPTY or NULL");
       }
       if (bodies.html != null && !bodies.html.isEmpty()) {
-        log.debug("SMTP EMAIL HTML preview (first 200 chars): {}", 
+        log.info("SMTP EMAIL HTML preview (first 200 chars): {}", 
             bodies.html.substring(0, Math.min(200, bodies.html.length())));
+      } else {
+        log.warn("SMTP EMAIL HTML is EMPTY or NULL");
       }
 
       IncomingEmailPayload payload = new IncomingEmailPayload(
@@ -136,7 +140,7 @@ public class DomainFilterMessageHandler implements MessageHandler {
 
     try {
       String contentType = part.getContentType();
-      log.debug("Extracting body from part with Content-Type: {}", contentType);
+      log.info("Extracting body from part with Content-Type: {}", contentType);
       
       if (part.isMimeType("text/plain")) {
         Object content = part.getContent();
@@ -173,13 +177,13 @@ public class DomainFilterMessageHandler implements MessageHandler {
           // First, try to get content directly using getContent()
           try {
             Object content = part.getContent();
-            log.debug("getContent() returned: {}", content != null ? content.getClass().getName() : "null");
+            log.info("getContent() returned: {}", content != null ? content.getClass().getName() : "null");
             if (content instanceof MimeMultipart) {
               mp = (MimeMultipart) content;
-              log.debug("Successfully got MimeMultipart from getContent()");
+              log.info("Successfully got MimeMultipart from getContent()");
             } else if (content instanceof Multipart) {
               mp = (Multipart) content;
-              log.debug("Successfully got Multipart from getContent()");
+              log.info("Successfully got Multipart from getContent()");
             } else {
               log.warn("getContent() returned unexpected type: {}", content != null ? content.getClass().getName() : "null");
             }
@@ -188,19 +192,21 @@ public class DomainFilterMessageHandler implements MessageHandler {
             // Try alternative approach: parse from raw bytes if available
             if (rawBytes != null && part instanceof MimeMessage) {
               try {
-                log.debug("Attempting to parse MimeMessage from raw bytes");
+                log.info("Attempting to parse MimeMessage from raw bytes");
                 Session session = Session.getInstance(new Properties());
                 MimeMessage rawMsg = new MimeMessage(session, new java.io.ByteArrayInputStream(rawBytes));
                 Object rawContent = rawMsg.getContent();
                 if (rawContent instanceof MimeMultipart) {
                   mp = (MimeMultipart) rawContent;
-                  log.debug("Successfully parsed MimeMultipart from raw bytes");
+                  log.info("Successfully parsed MimeMultipart from raw bytes");
                 } else if (rawContent instanceof Multipart) {
                   mp = (Multipart) rawContent;
-                  log.debug("Successfully parsed Multipart from raw bytes");
+                  log.info("Successfully parsed Multipart from raw bytes");
+                } else {
+                  log.warn("Raw content is not Multipart: {}", rawContent != null ? rawContent.getClass().getName() : "null");
                 }
               } catch (Exception e2) {
-                log.warn("Failed to parse multipart from raw bytes: {}", e2.getMessage());
+                log.error("Failed to parse multipart from raw bytes: {}", e2.getMessage(), e2);
               }
             }
           } catch (Exception e) {
@@ -237,14 +243,14 @@ public class DomainFilterMessageHandler implements MessageHandler {
           log.error("Could not extract multipart content from part with Content-Type: {}", contentType);
         }
       } else {
-        log.debug("Skipping part with MIME type: {}", contentType);
+        log.info("Skipping part with MIME type: {} (not text/plain, text/html, or multipart/*)", contentType);
       }
     } catch (ClassCastException e) {
-      log.warn("ClassCastException while extracting body from part with MIME type: {}, error: {}", 
+      log.error("ClassCastException while extracting body from part with MIME type: {}, error: {}", 
           part.getContentType(), e.getMessage(), e);
       // Return empty bodies if we can't parse
     } catch (Exception e) {
-      log.warn("Exception while extracting body from part with MIME type: {}, error: {}", 
+      log.error("Exception while extracting body from part with MIME type: {}, error: {}", 
           part.getContentType(), e.getMessage(), e);
     }
     
