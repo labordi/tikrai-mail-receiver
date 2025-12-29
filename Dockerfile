@@ -2,10 +2,11 @@ FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
-RUN mvn -q -DskipTests clean package && \
-    ls -la /app/target/*.jar && \
-    echo "Checking JAR manifest:" && \
-    unzip -p /app/target/tikrai-mail-receiver-0.1.0.jar META-INF/MANIFEST.MF || true
+# Retry build up to 3 times if Maven Central fails
+RUN for i in 1 2 3; do \
+      mvn -q -DskipTests clean package && break || \
+      (echo "Build attempt $i failed, retrying..." && sleep 5); \
+    done
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
