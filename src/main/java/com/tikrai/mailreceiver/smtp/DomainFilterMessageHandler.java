@@ -174,7 +174,7 @@ public class DomainFilterMessageHandler implements MessageHandler {
         log.info("Found multipart/*, extracting sub-parts, Content-Type: {}", contentType);
         Multipart mp = null;
         try {
-          // First, try to get content directly using getContent()
+          // First, try to get content directly using getContent() - but catch ClassCastException
           try {
             Object content = part.getContent();
             log.info("getContent() returned: {}", content != null ? content.getClass().getName() : "null");
@@ -188,25 +188,55 @@ public class DomainFilterMessageHandler implements MessageHandler {
               log.warn("getContent() returned unexpected type: {}", content != null ? content.getClass().getName() : "null");
             }
           } catch (ClassCastException e) {
-            log.warn("ClassCastException getting multipart content: {}", e.getMessage());
-            // Try alternative approach: parse from raw bytes if available
-            if (rawBytes != null && part instanceof MimeMessage) {
-              try {
-                log.info("Attempting to parse MimeMessage from raw bytes");
-                Session session = Session.getInstance(new Properties());
-                MimeMessage rawMsg = new MimeMessage(session, new java.io.ByteArrayInputStream(rawBytes));
-                Object rawContent = rawMsg.getContent();
-                if (rawContent instanceof MimeMultipart) {
-                  mp = (MimeMultipart) rawContent;
-                  log.info("Successfully parsed MimeMultipart from raw bytes");
-                } else if (rawContent instanceof Multipart) {
-                  mp = (Multipart) rawContent;
-                  log.info("Successfully parsed Multipart from raw bytes");
-                } else {
-                  log.warn("Raw content is not Multipart: {}", rawContent != null ? rawContent.getClass().getName() : "null");
+            log.warn("ClassCastException getting multipart content (Jakarta Activation conflict), trying alternative method: {}", e.getMessage());
+            // Alternative: use InputStream directly to create MimeMultipart
+            try {
+              if (part instanceof MimeMessage) {
+                // For MimeMessage, try to get the multipart from the message's input stream
+                log.info("Attempting to create MimeMultipart from MimeMessage InputStream");
+                MimeMessage mimeMsg = (MimeMessage) part;
+                try (java.io.InputStream is = mimeMsg.getInputStream()) {
+                  // Create a new MimeMultipart from the content type and input stream
+                  String ct = mimeMsg.getContentType();
+                  if (ct != null && ct.toLowerCase().startsWith("multipart/")) {
+                    mp = new MimeMultipart(new jakarta.mail.util.ByteArrayDataSource(
+                        is.readAllBytes(), ct));
+                    log.info("Successfully created MimeMultipart from InputStream");
+                  }
                 }
-              } catch (Exception e2) {
-                log.error("Failed to parse multipart from raw bytes: {}", e2.getMessage(), e2);
+              } else if (part instanceof jakarta.mail.internet.MimeBodyPart) {
+                // For MimeBodyPart, try to get the multipart from the body part's input stream
+                log.info("Attempting to create MimeMultipart from MimeBodyPart InputStream");
+                jakarta.mail.internet.MimeBodyPart mimePart = (jakarta.mail.internet.MimeBodyPart) part;
+                try (java.io.InputStream is = mimePart.getInputStream()) {
+                  String ct = mimePart.getContentType();
+                  if (ct != null && ct.toLowerCase().startsWith("multipart/")) {
+                    mp = new MimeMultipart(new jakarta.mail.util.ByteArrayDataSource(
+                        is.readAllBytes(), ct));
+                    log.info("Successfully created MimeMultipart from MimeBodyPart InputStream");
+                  }
+                }
+              }
+            } catch (Exception e2) {
+              log.error("Failed to create MimeMultipart from InputStream: {}", e2.getMessage(), e2);
+              // Last resort: if we have raw bytes and part is MimeMessage, try parsing from scratch
+              if (rawBytes != null && part instanceof MimeMessage) {
+                try {
+                  log.info("Last resort: attempting to parse MimeMessage from raw bytes with new Session");
+                  Session session = Session.getInstance(new Properties());
+                  MimeMessage rawMsg = new MimeMessage(session, new java.io.ByteArrayInputStream(rawBytes));
+                  // Try to get multipart without using getContent() - use getInputStream() instead
+                  try (java.io.InputStream rawIs = rawMsg.getInputStream()) {
+                    String rawCt = rawMsg.getContentType();
+                    if (rawCt != null && rawCt.toLowerCase().startsWith("multipart/")) {
+                      mp = new MimeMultipart(new jakarta.mail.util.ByteArrayDataSource(
+                          rawIs.readAllBytes(), rawCt));
+                      log.info("Successfully created MimeMultipart from raw bytes InputStream");
+                    }
+                  }
+                } catch (Exception e3) {
+                  log.error("Failed to parse multipart from raw bytes InputStream: {}", e3.getMessage(), e3);
+                }
               }
             }
           } catch (Exception e) {
