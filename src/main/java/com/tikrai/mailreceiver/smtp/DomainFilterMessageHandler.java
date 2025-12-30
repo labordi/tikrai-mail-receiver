@@ -57,61 +57,86 @@ public class DomainFilterMessageHandler implements MessageHandler {
 
   @Override
   public void data(InputStream data) throws RejectException {
+    String subject = "";
+    Map<String, List<String>> headers = new LinkedHashMap<>();
+    BodyParts bodies = new BodyParts("", "");
+    String rawB64 = "";
+    
     try {
       log.info("SMTP DATA received - FROM: {}, TO: {}", mailFrom, rcptTo);
       byte[] rawBytes = data.readAllBytes();
       log.debug("SMTP DATA size: {} bytes", rawBytes.length);
-      String rawB64 = Base64.getEncoder().encodeToString(rawBytes);
+      rawB64 = Base64.getEncoder().encodeToString(rawBytes);
 
       Session session = Session.getInstance(new Properties());
       MimeMessage msg = new MimeMessage(session, new java.io.ByteArrayInputStream(rawBytes));
 
-      String subject = Optional.ofNullable(msg.getSubject()).orElse("");
-      log.info("SMTP EMAIL SUBJECT: {}", subject);
-
-      Map<String, List<String>> headers = new LinkedHashMap<>();
-      @SuppressWarnings("unchecked")
-      Enumeration<Header> allHeaders = msg.getAllHeaders();
-      while (allHeaders.hasMoreElements()) {
-        Header h = allHeaders.nextElement();
-        headers.computeIfAbsent(h.getName(), k -> new ArrayList<>()).add(h.getValue());
-      }
-      log.debug("SMTP EMAIL HEADERS: {}", headers.keySet());
-
-      log.info("SMTP EMAIL Content-Type: {}", msg.getContentType());
-      BodyParts bodies = extractBodies(msg, rawBytes);
-      log.info("SMTP EMAIL BODY EXTRACTED - text length: {}, html length: {}", 
-          bodies.text != null ? bodies.text.length() : 0,
-          bodies.html != null ? bodies.html.length() : 0);
-      if (bodies.text != null && !bodies.text.isEmpty()) {
-        log.info("SMTP EMAIL TEXT preview (first 200 chars): {}", 
-            bodies.text.substring(0, Math.min(200, bodies.text.length())));
-      } else {
-        log.warn("SMTP EMAIL TEXT is EMPTY or NULL");
-      }
-      if (bodies.html != null && !bodies.html.isEmpty()) {
-        log.info("SMTP EMAIL HTML preview (first 200 chars): {}", 
-            bodies.html.substring(0, Math.min(200, bodies.html.length())));
-      } else {
-        log.warn("SMTP EMAIL HTML is EMPTY or NULL");
+      try {
+        subject = Optional.ofNullable(msg.getSubject()).orElse("");
+        log.info("SMTP EMAIL SUBJECT: {}", subject);
+      } catch (Exception e) {
+        log.warn("Failed to extract subject, using empty string: {}", e.getMessage());
       }
 
-      IncomingEmailPayload payload = new IncomingEmailPayload(
-          Optional.ofNullable(mailFrom).orElse(""),
-          List.copyOf(rcptTo),
-          subject,
-          bodies.text,
-          bodies.html,
-          headers,
-          rawB64
-      );
+      try {
+        @SuppressWarnings("unchecked")
+        Enumeration<Header> allHeaders = msg.getAllHeaders();
+        while (allHeaders.hasMoreElements()) {
+          Header h = allHeaders.nextElement();
+          headers.computeIfAbsent(h.getName(), k -> new ArrayList<>()).add(h.getValue());
+        }
+        log.debug("SMTP EMAIL HEADERS: {}", headers.keySet());
+      } catch (Exception e) {
+        log.warn("Failed to extract headers, using empty map: {}", e.getMessage());
+      }
 
+      try {
+        log.info("SMTP EMAIL Content-Type: {}", msg.getContentType());
+        bodies = extractBodies(msg, rawBytes);
+        log.info("SMTP EMAIL BODY EXTRACTED - text length: {}, html length: {}", 
+            bodies.text != null ? bodies.text.length() : 0,
+            bodies.html != null ? bodies.html.length() : 0);
+        if (bodies.text != null && !bodies.text.isEmpty()) {
+          log.info("SMTP EMAIL TEXT preview (first 200 chars): {}", 
+              bodies.text.substring(0, Math.min(200, bodies.text.length())));
+        } else {
+          log.warn("SMTP EMAIL TEXT is EMPTY or NULL");
+        }
+        if (bodies.html != null && !bodies.html.isEmpty()) {
+          log.info("SMTP EMAIL HTML preview (first 200 chars): {}", 
+              bodies.html.substring(0, Math.min(200, bodies.html.length())));
+        } else {
+          log.warn("SMTP EMAIL HTML is EMPTY or NULL");
+        }
+      } catch (Exception e) {
+        log.warn("Failed to extract body parts, using empty strings: {}", e.getMessage());
+        bodies = new BodyParts("", "");
+      }
+
+    } catch (Exception e) {
+      log.error("Failed to read or parse email data - FROM: {}, TO: {}, ERROR: {}", 
+          mailFrom, rcptTo, e.getMessage(), e);
+      // Continue with empty data - we'll still try to forward
+    }
+
+    // Create payload with whatever we managed to extract
+    IncomingEmailPayload payload = new IncomingEmailPayload(
+        Optional.ofNullable(mailFrom).orElse(""),
+        List.copyOf(rcptTo),
+        subject,
+        bodies.text != null ? bodies.text : "",
+        bodies.html != null ? bodies.html : "",
+        headers,
+        rawB64
+    );
+
+    // Forward is the critical operation - only throw 451 if this fails
+    try {
       log.info("Forwarding email - FROM: {}, TO: {}, SUBJECT: {}", mailFrom, rcptTo, subject);
       forwardClient.forward(payload);
       log.info("Email forwarded successfully - FROM: {}, TO: {}", mailFrom, rcptTo);
-
     } catch (Exception e) {
-      log.error("Failed to process email - FROM: {}, TO: {}, ERROR: {}", 
+      log.error("Failed to forward email - FROM: {}, TO: {}, ERROR: {}", 
           mailFrom, rcptTo, e.getMessage(), e);
       throw new RejectException(451, "Processing error");
     }
